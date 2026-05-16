@@ -1,17 +1,23 @@
 const express = require("express");
-const {AdminAuth, UserAuth} = require("./middlewares/auth")
+const {UserAuth} = require("./middlewares/auth")
 
 const app = express();
 
 const connectDB = require("./config/database");
 
-const User = require("./models/user");
-
-app.use(express.json());
+const {User} = require("./models/user");
 
 const {validateSignUpData} = require("./utils/validation")
 
 const bcrypt = require("bcrypt");
+
+const cookieParser = require("cookie-parser");
+
+const jwt = require("jsonwebtoken");
+
+app.use(express.json());
+
+app.use(cookieParser());
 
 app.post("/test",(req, res) => {
     res.send("Data saved successfull to the database.");
@@ -48,12 +54,21 @@ app.post("/signup", async (req, res) => {
 app.post("/login", async (req, res) => {
     try{
         const {emailId, password} = req.body;
-        const user = await User.findOne({emailId : emailId});
+        const user = await User.findOne({emailId : emailId}).exec();
         if(!user){
             throw new Error("Email is NOT yet registered, please Signup first!");
         }
-        const isPasswordValid = await bcrypt.compare(password, user.password);
+        // const isPasswordValid = await bcrypt.compare(password, user.password);
+        const isPasswordValid = await user.validatePassword(password);
         if(isPasswordValid){
+            // Create a JWT Token:
+            // const token = await jwt.sign({_id: user._id}, "Piyush11", {expiresIn: "1d"});
+            const token = await user.getJWT();
+            // user_id is hided data, Piyush11 is the secret key
+            console.log(token);
+
+            res.cookie('token', token, {expires: new Date(Date.now() + 60000)});
+            // Cookie expire time = 10 secs 
             res.send("Login Successful");
         }else{
             throw new Error("Incorrect password, please try again")
@@ -61,6 +76,38 @@ app.post("/login", async (req, res) => {
     }catch(err){
         res.status(400).send("ERROR: " + err.message);
     }
+});
+
+// After adding userAuth middleware, many redundant code could be deleted, which are already been done in userAuth
+app.get("/profile", UserAuth, async (req, res) => {
+    try{
+        // const cookies = req.cookies;
+        // console.log(cookies);
+        // const { token } = cookies;
+        // if(!token){
+        //     throw new Error("Invalid Token");
+        // }
+
+        // // Validate my tokens
+        // const decodedMessage = await jwt.verify(token, "Piyush11"); 
+        // const {_id} = decodedMessage;
+        // console.log("Logged In user is: " + _id);
+
+        // const user = await User.findById(_id);
+        // if(!user){
+        //     throw new Error("User does NOT exist");
+        // }/
+        const user = req.user;
+        res.send(user);
+    }catch(err){
+        res.status(400).send("ERROR : " + err.message);
+    }
+});
+
+app.post("/sendConnectionRequest", UserAuth, async (req, res) => {
+    console.log("Sending connection request");
+    const user = req.user;
+    res.send("Connection request sent by: "+user.firstName);
 });
 
 app.get("/user", async (req, res) => {

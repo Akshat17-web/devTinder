@@ -1,5 +1,7 @@
 const mongoose = require("mongoose");
 const validator = require('validator');
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
 const userSchema = new mongoose.Schema({
     firstName: {
         type: String,
@@ -38,7 +40,7 @@ const userSchema = new mongoose.Schema({
     gender: {
         type: String,
         validate(value){
-            if(!["male", "female", "others"].include(value)){
+            if(!["male", "female", "others"].includes(value)){
                 throw new Error("Gender data is NOT valid");
             }
         } // This function will only work on insertion, not on updation. (Without runValidators)
@@ -63,7 +65,20 @@ const userSchema = new mongoose.Schema({
     timestamps: true
 });
 
+userSchema.methods.getJWT = async function(){
+    const user = this;
+
+    const token = await jwt.sign({_id: user._id}, "Piyush11", {expiresIn: "1d"});
+    return token;
+};
+
+userSchema.methods.validatePassword = async function (passwordIpByUser){
+    const hashPassword = this.password;
+    const isPasswordValid = await bcrypt.compare(passwordIpByUser, hashPassword);
+    return isPasswordValid;
+
+}
 // "U" of User should always be capital
 const User = mongoose.model("User", userSchema);
 
-module.exports = User;
+module.exports = {User};
